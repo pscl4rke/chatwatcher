@@ -1,0 +1,76 @@
+#!/usr/bin/env python
+
+# This was heavily inspired by muc.py in the sleekxmpp examples.
+
+import logging
+
+import sleekxmpp
+
+import config
+
+class Options:
+    """Container for the options used in chat watching."""
+
+    def __init__(self):
+        """Create a new options container."""
+        self._options = config.OPTIONS
+
+    def __getattr__(self, option):
+        """Look up an option using options.option syntax."""
+        return self._options[option]
+
+
+class ChatWatcher(sleekxmpp.ClientXMPP):
+    """Enters a chat room and acts upon messages said."""
+
+    def __init__(self, options):
+        """Create a new ChatWatcher, logging on with given details."""
+        self.options = options
+        sleekxmpp.ClientXMPP.__init__(self,
+            options.jabber_id, options.jabber_password)
+        self.add_event_handler("session_start", self.start)
+        self.add_event_handler("groupchat_message", self.message)
+
+    def start(self, event):
+        """Event handler for an initial successful connection."""
+        self.get_roster()
+        self.send_presence()
+        self.plugin['xep_0045'].joinMUC(
+            self.options.room_id,
+            self.options.room_alias,
+            password=self.options.room_password,
+            wait=True
+        )
+
+    def message(self, message):
+        """Event handler for an incoming chat message."""
+        # Available: type, to, from, nick, subject, body, html ???
+        print "I have been told by %(mucnick)s that %(body)s" % message
+
+
+def log_level(options):
+    """Return the logging level according to the options."""
+    levels = {
+        'debug': logging.DEBUG, 'info': logging.INFO,
+        'warning': logging.WARNING, 'error': logging.ERROR,
+        'critical': logging.CRITICAL}
+    if options.verbosity.lower() not in levels:
+        raise Exception("Unknown verbosity '%s'" % options.verbosity)
+    return levels[options.verbosity.lower()]
+
+
+def launch_chatwatcher():
+    options = Options()
+    logging.basicConfig(level=log_level(options))
+    chatwatcher = ChatWatcher(options)
+    chatwatcher.register_plugin('xep_0030') # Service Discovery
+    chatwatcher.register_plugin('xep_0045') # Multi-User Chat
+    chatwatcher.register_plugin('xep_0199') # XMPP Ping
+    connected = chatwatcher.connect()
+    assert connected
+    chatwatcher.process(block=True)
+
+
+if __name__ == '__main__':
+    launch_chatwatcher()
+
