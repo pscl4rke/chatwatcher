@@ -2,6 +2,7 @@
 
 # This was heavily inspired by muc.py in the sleekxmpp examples.
 
+import sys
 import logging
 import ConfigParser as configparser
 
@@ -53,6 +54,9 @@ class ChatWatcher(sleekxmpp.ClientXMPP):
             options.account.jid, options.account.password)
         self.add_event_handler("session_start", self.start)
         self.add_event_handler("groupchat_message", self.message)
+        self.register_plugin('xep_0030') # Service Discovery
+        self.register_plugin('xep_0045') # Multi-User Chat
+        self.register_plugin('xep_0199') # XMPP Ping
 
     def start(self, event):
         """Event handler for an initial successful connection."""
@@ -82,20 +86,31 @@ def log_level(options):
     return levels[options.verbosity.lower()]
 
 
-def launch_chatwatcher():
+def usage():
+    print "Usage:"
+    print "    %s /path/to/settings.cfg" % sys.argv[0]
+
+
+def main():
+    # Get config file:
+    if len(sys.argv) != 2:
+        usage()
+        sys.exit(1)
+    config_file = sys.argv[1]
+    # Load config file:
     parser = OptionParser()
     parser.add_top_level_section('general')
-    options = parser.build("example.cfg")
+    options = parser.build(config_file)
+    # Prepare to connect:
     logging.basicConfig(level=log_level(options))
+    # Connect:
     chatwatcher = ChatWatcher(options)
-    chatwatcher.register_plugin('xep_0030') # Service Discovery
-    chatwatcher.register_plugin('xep_0045') # Multi-User Chat
-    chatwatcher.register_plugin('xep_0199') # XMPP Ping
     connected = chatwatcher.connect()
     assert connected
+    # Start the handling loop:
     chatwatcher.process(block=True)
 
 
 if __name__ == '__main__':
-    launch_chatwatcher()
+    main()
 
