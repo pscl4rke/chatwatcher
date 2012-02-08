@@ -5,6 +5,8 @@
 import sys
 import logging
 import ConfigParser as configparser
+import subprocess
+import string
 
 import sleekxmpp
 
@@ -72,7 +74,11 @@ class ChatWatcher(sleekxmpp.ClientXMPP):
     def message(self, message):
         """Event handler for an incoming chat message."""
         # Available: type, to, from, nick, subject, body, html ???
-        print "I have been told by %(mucnick)s that %(body)s" % message
+        announcement = string.Template(self.options.handler.pipein + "\n")
+        process = subprocess.Popen(self.options.handler.command, shell=True,
+                                            stdin=subprocess.PIPE)
+        process.communicate(announcement.safe_substitute(message))
+        process.wait()
 
 
 def log_level(options):
