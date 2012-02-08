@@ -3,21 +3,44 @@
 # This was heavily inspired by muc.py in the sleekxmpp examples.
 
 import logging
+import ConfigParser as configparser
 
 import sleekxmpp
 
-import config
 
-class Options:
-    """Container for the options used in chat watching."""
+class AttriDict(dict):
+    """Like a dictionary, but also like an object."""
+
+    def __getattr__(self, key):
+        """Allow keys to be accessed like attributes."""
+        return self[key]
+
+
+class OptionParser:
+    """Build a structure."""
 
     def __init__(self):
-        """Create a new options container."""
-        self._options = config.OPTIONS
+        """Create a new OptionParser."""
+        self.top_level_sections = []
 
-    def __getattr__(self, option):
-        """Look up an option using options.option syntax."""
-        return self._options[option]
+    def add_top_level_section(self, section):
+        """Declare that a given section's options are top-level."""
+        self.top_level_sections.append(section)
+
+    def build(self, filename):
+        """Build an options struction from the given file."""
+        parser = configparser.ConfigParser()
+        parser.read(filename)
+        options = AttriDict()
+        for section in parser.sections():
+            if section in self.top_level_sections:
+                for option in parser.options(section):
+                    options[option] = parser.get(section, option)
+            else:
+                options[section] = AttriDict()
+                for option in parser.options(section):
+                    options[section][option] = parser.get(section, option)
+        return options
 
 
 class ChatWatcher(sleekxmpp.ClientXMPP):
@@ -27,7 +50,7 @@ class ChatWatcher(sleekxmpp.ClientXMPP):
         """Create a new ChatWatcher, logging on with given details."""
         self.options = options
         sleekxmpp.ClientXMPP.__init__(self,
-            options.jabber_id, options.jabber_password)
+            options.account.jid, options.account.password)
         self.add_event_handler("session_start", self.start)
         self.add_event_handler("groupchat_message", self.message)
 
@@ -36,9 +59,9 @@ class ChatWatcher(sleekxmpp.ClientXMPP):
         self.get_roster()
         self.send_presence()
         self.plugin['xep_0045'].joinMUC(
-            self.options.room_id,
-            self.options.room_alias,
-            password=self.options.room_password,
+            self.options.room.id,
+            self.options.room.alias,
+            password=self.options.room.password,
             wait=True
         )
 
@@ -60,7 +83,9 @@ def log_level(options):
 
 
 def launch_chatwatcher():
-    options = Options()
+    parser = OptionParser()
+    parser.add_top_level_section('general')
+    options = parser.build("example.cfg")
     logging.basicConfig(level=log_level(options))
     chatwatcher = ChatWatcher(options)
     chatwatcher.register_plugin('xep_0030') # Service Discovery
